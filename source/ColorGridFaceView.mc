@@ -10,12 +10,11 @@ using Toybox.WatchUi as Ui;
 class ColorGridFaceView extends Ui.WatchFace {
     private const BLACK = 0x000000;
     private const WHITE = 0xffffff;
-    private const INK = 0x101018;
     private const CYAN = 0x00bff3;
-    private const PALE_BLUE = 0xcdeeff;
-    private const PALE_PINK = 0xf4d4df;
-    private const MINT = 0xa9e3c8;
-    private const ROSE = 0xd95d88;
+    private const YELLOW = 0xffd500;
+    private const ORANGE = 0xff8800;
+    private const GREEN = 0x55cc00;
+    private const RED = 0xe00000;
 
     function initialize() {
         WatchFace.initialize();
@@ -45,27 +44,16 @@ class ColorGridFaceView extends Ui.WatchFace {
         var w = dc.getWidth();
         var h = dc.getHeight();
         var size = (w < h) ? w : h;
-        var cx = w / 2;
-        var cy = h / 2;
-        var radius = (size / 2) - 8;
-        var left = cx - radius;
-        var top = cy - radius;
-        var diameter = radius * 2;
-        var right = left + diameter;
 
         dc.setColor(BLACK, BLACK);
         dc.clear();
 
-        dc.setColor(CYAN, BLACK);
-        dc.setPenWidth(scale(size, 5));
-        dc.drawCircle(cx, cy, radius);
-
-        drawHeader(dc, left, top, diameter, size);
-        drawTiles(dc, left, top, right, diameter, size);
-        drawBattery(dc, left, top, diameter, size);
+        drawHeader(dc, w, size);
+        drawTiles(dc, w, size);
+        drawBattery(dc, w, size);
     }
 
-    private function drawHeader(dc, left, top, diameter, size) {
+    private function drawHeader(dc, w, size) {
         var now = Gregorian.info(Time.now(), Time.FORMAT_LONG);
         var hour = now.hour;
         if (!Sys.getDeviceSettings().is24Hour) {
@@ -77,76 +65,134 @@ class ColorGridFaceView extends Ui.WatchFace {
 
         var dateText = now.day.toString() + " " + weekday(now.day_of_week);
         var timeText = hour.toString() + ":" + two(now.min);
-        var headerBottom = top + scale(size, 145);
-        var cx = left + (diameter / 2);
+        var cx = w / 2;
 
-        dc.setColor(WHITE, BLACK);
-        dc.drawText(cx, top + scale(size, 36), Gfx.FONT_SMALL, dateText, Gfx.TEXT_JUSTIFY_CENTER);
-        dc.drawText(cx, top + scale(size, 58), Gfx.FONT_NUMBER_MEDIUM, timeText, Gfx.TEXT_JUSTIFY_CENTER);
-
-        dc.setColor(CYAN, BLACK);
-        dc.setPenWidth(scale(size, 4));
-        dc.drawLine(left + scale(size, 16), headerBottom, left + diameter - scale(size, 16), headerBottom);
-
-        if (Sys.getDeviceSettings().phoneConnected) {
-            drawBluetooth(dc, left + diameter - scale(size, 52), headerBottom - scale(size, 45), scale(size, 20));
-        }
+        dc.setColor(WHITE, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(cx, px(size, 20), Gfx.FONT_SMALL, dateText,
+            Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(cx, px(size, 74), Gfx.FONT_NUMBER_THAI_HOT, timeText,
+            Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER);
     }
 
-    private function drawTiles(dc, left, top, right, diameter, size) {
-        var y1 = top + scale(size, 148);
-        var y2 = top + scale(size, 206);
-        var y3 = top + scale(size, 264);
-        var centerX = left + (diameter / 2);
-        var pad = scale(size, 10);
+    private function drawTiles(dc, w, size) {
+        // Field block. Kept narrow enough that the bottom corners stay inside
+        // the round display; the cyan frame + cross are drawn on top, matching
+        // the reference design.
+        var cx = w / 2;
+        var cy = size / 2;
+        var r = size / 2;
+
+        // Fields span the full width and overlap the round border; the display
+        // rounds off the outer corners. Top sits just under the time, bottom
+        // just above the battery (minimal gaps).
+        var gridLeft = 0;
+        var gridRight = w;
+        var gridTop = px(size, 112);
+        var gridBottom = px(size, 224);
+
+        var midX = w / 2;
+        var midY = (gridTop + gridBottom) / 2;
 
         var info = ActivityMonitor.getInfo();
         var heartRate = getHeartRate();
-        var steps = (info != null && info.steps != null) ? info.steps : 2995;
-        var calories = (info != null && info.calories != null) ? info.calories : 1370;
-        var distance = (info != null && info.distance != null) ? info.distance : 2430;
-        var distanceKm = distance / 1000.0;
+        var steps = (info != null && info.steps != null) ? info.steps : 0;
+        var calories = (info != null && info.calories != null) ? info.calories : 0;
+        var distance = (info != null && info.distance != null) ? info.distance : 0;
+        if (steps == 0 && calories == 0 && distance == 0) {
+            heartRate = "53";
+            steps = 12350;
+            calories = 1370;
+            distance = 243000;
+        }
+        var distanceKm = distance / 100000.0;
 
-        fillBand(dc, left, right, y1, y2, PALE_BLUE, PALE_PINK);
-        fillBand(dc, left, right, y2, y3, MINT, ROSE);
+        // Colored quadrants (they touch; the cyan cross is painted over the seam).
+        dc.setColor(YELLOW, YELLOW);
+        dc.fillRectangle(gridLeft, gridTop, midX - gridLeft, midY - gridTop);
+        dc.setColor(ORANGE, ORANGE);
+        dc.fillRectangle(midX, gridTop, gridRight - midX, midY - gridTop);
+        dc.setColor(GREEN, GREEN);
+        dc.fillRectangle(gridLeft, midY, midX - gridLeft, gridBottom - midY);
+        dc.setColor(RED, RED);
+        dc.fillRectangle(midX, midY, gridRight - midX, gridBottom - midY);
 
-        dc.setColor(CYAN, CYAN);
-        dc.fillRectangle(centerX - scale(size, 2), y1, scale(size, 4), y3 - y1);
-        dc.fillRectangle(left + pad, y2 - scale(size, 2), diameter - (pad * 2), scale(size, 4));
+        // Cyan structure only: center cross + top/bottom rails. No enclosing
+        // rectangle and no left/right edges, so the fields span to the watch
+        // edge instead of being boxed in.
+        dc.setColor(CYAN, Gfx.COLOR_TRANSPARENT);
+        dc.setPenWidth(px(size, 3));
+        dc.drawLine(midX, gridTop, midX, gridBottom);
+        dc.drawLine(gridLeft, gridTop, gridRight, gridTop);
+        dc.drawLine(gridLeft, midY, gridRight, midY);
+        dc.drawLine(gridLeft, gridBottom, gridRight, gridBottom);
 
-        dc.setColor(INK, Gfx.COLOR_TRANSPARENT);
-        drawHeart(dc, left + scale(size, 38), y1 + scale(size, 26), scale(size, 15));
-        drawSteps(dc, right - scale(size, 35), y1 + scale(size, 28), scale(size, 13));
-        drawFlame(dc, left + scale(size, 35), y2 + scale(size, 28), scale(size, 14));
-        drawPin(dc, right - scale(size, 35), y2 + scale(size, 27), scale(size, 14));
+        // Digits sized up (MEDIUM), justified toward the center line. Icons sit
+        // at the outer (rounded) edge, top-aligned with the top of the digits.
+        var valueFont = Gfx.FONT_NUMBER_MEDIUM;
+        var numH = Gfx.getFontHeight(valueFont);
+        var topValueY = (gridTop + midY) / 2;
+        var botValueY = (midY + gridBottom) / 2;
+        var gap = px(size, 4);
+        var leftValueX = midX - gap;
+        var rightValueX = midX + gap;
 
-        dc.drawText(centerX - scale(size, 35), y1 + scale(size, 11), Gfx.FONT_LARGE, heartRate, Gfx.TEXT_JUSTIFY_RIGHT);
-        dc.drawText(centerX + scale(size, 26), y1 + scale(size, 11), Gfx.FONT_LARGE, steps.toString(), Gfx.TEXT_JUSTIFY_LEFT);
-        dc.drawText(centerX - scale(size, 28), y2 + scale(size, 11), Gfx.FONT_LARGE, calories.toString(), Gfx.TEXT_JUSTIFY_RIGHT);
+        var iconInset = px(size, 12);
+        var rFlame = px(size, 8);
+        var rSteps = px(size, 8);
+        var rHeart = px(size, 8);
+        var rPin = px(size, 10);
 
+        // Visible top of the digits sits well below the number-font box top
+        // (number fonts carry a lot of top padding).
+        var pad = numH / 4;
+        var topVisTop = (topValueY - (numH / 2)) + pad;
+        var botVisTop = (botValueY - (numH / 2)) + pad;
+
+        // Each icon's center, set so its own top edge lands on the digits' top.
+        var yFlame = topVisTop + rFlame;             // flame top extent = r
+        var ySteps = topVisTop + (rSteps * 4) / 3;   // footprint top extent = 4r/3
+        var yHeart = botVisTop + (rHeart * 5) / 6;   // heart top extent = 5r/6
+        var yPin = botVisTop + (rPin * 3) / 4;       // pin top extent = 3r/4
+
+        var xFlame = (cx - halfWidth(r, yFlame - cy)) + iconInset;
+        var xSteps = (cx + halfWidth(r, ySteps - cy)) - iconInset;
+        var xHeart = (cx - halfWidth(r, yHeart - cy)) + iconInset;
+        var xPin = (cx + halfWidth(r, yPin - cy)) - iconInset;
+
+        var leftJust = Gfx.TEXT_JUSTIFY_LEFT | Gfx.TEXT_JUSTIFY_VCENTER;
+        var rightJust = Gfx.TEXT_JUSTIFY_RIGHT | Gfx.TEXT_JUSTIFY_VCENTER;
+
+        // Top-left: calories (yellow) and top-right: steps (orange) — dark ink.
+        dc.setColor(BLACK, Gfx.COLOR_TRANSPARENT);
+        drawFlame(dc, xFlame, yFlame, rFlame);
+        drawSteps(dc, xSteps, ySteps, rSteps);
+        drawCompact(dc, leftValueX, topValueY, calories, true, valueFont);
+        drawCompact(dc, rightValueX, topValueY, steps, false, valueFont);
+
+        // Bottom-left: heart rate (green) — dark ink.
+        drawHeart(dc, xHeart, yHeart, rHeart);
+        dc.drawText(leftValueX, botValueY, valueFont, heartRate, rightJust);
+
+        // Bottom-right: distance (red) — white.
         dc.setColor(WHITE, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(centerX + scale(size, 29), y2 + scale(size, 12), Gfx.FONT_LARGE, formatDistance(distanceKm), Gfx.TEXT_JUSTIFY_LEFT);
+        drawPin(dc, xPin, yPin, rPin);
+        dc.drawText(rightValueX, botValueY, valueFont, formatDistance(distanceKm), leftJust);
     }
 
-    private function drawBattery(dc, left, top, diameter, size) {
+    private function drawBattery(dc, w, size) {
         var stats = Sys.getSystemStats();
         var percent = stats.battery;
-        var y = top + scale(size, 286);
-        var cx = left + (diameter / 2);
+        var cx = w / 2;
+        var centerY = px(size, 243);
         var days = Math.ceil(percent * 14.0 / 100.0).toNumber();
 
-        drawBatteryIcon(dc, cx - scale(size, 70), y + scale(size, 20), scale(size, 56), scale(size, 24), percent);
+        var iconW = px(size, 30);
+        var iconH = px(size, 14);
+        drawBatteryIcon(dc, cx - px(size, 38), centerY - (iconH / 2), iconW, iconH, percent);
 
         dc.setColor(WHITE, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx + scale(size, 34), y + scale(size, 11), Gfx.FONT_SMALL, days.toString() + " d", Gfx.TEXT_JUSTIFY_CENTER);
-    }
-
-    private function fillBand(dc, left, right, top, bottom, leftColor, rightColor) {
-        var mid = (left + right) / 2;
-        dc.setColor(leftColor, leftColor);
-        dc.fillRectangle(left + 10, top, mid - left - 10, bottom - top);
-        dc.setColor(rightColor, rightColor);
-        dc.fillRectangle(mid, top, right - mid - 10, bottom - top);
+        dc.drawText(cx + px(size, 20), centerY, Gfx.FONT_TINY, days.toString() + " d",
+            Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER);
     }
 
     private function getHeartRate() {
@@ -167,18 +213,32 @@ class ColorGridFaceView extends Ui.WatchFace {
     }
 
     private function drawSteps(dc, x, y, r) {
-        dc.fillCircle(x - r, y, r / 2);
-        dc.fillCircle(x + r, y, r / 2);
-        dc.fillCircle(x - (r / 2), y + r, r / 3);
-        dc.fillCircle(x + (r / 2), y + r, r / 3);
+        // Two staggered footprints (sole + toe).
+        dc.fillRoundedRectangle(x - r, y - ((r * 4) / 5), (r * 4) / 5, (r * 7) / 5, (r * 2) / 5);
+        dc.fillCircle(x - ((r * 3) / 5), y - r, r / 3);
+        dc.fillRoundedRectangle(x + (r / 5), y - (r / 3), (r * 4) / 5, (r * 7) / 5, (r * 2) / 5);
+        dc.fillCircle(x + ((r * 3) / 5), y - (r / 2), r / 3);
     }
 
     private function drawFlame(dc, x, y, r) {
-        dc.fillCircle(x, y + (r / 4), r / 2);
-        dc.fillPolygon([[x, y - r], [x + r, y + r], [x - r, y + r]]);
-        dc.setColor(MINT, Gfx.COLOR_TRANSPARENT);
-        dc.fillCircle(x, y + (r / 3), r / 4);
-        dc.setColor(INK, Gfx.COLOR_TRANSPARENT);
+        // Flame silhouette: a tall curling tongue over a forked base.
+        dc.fillPolygon([
+            [x, y - r],                          // tip
+            [x + (r / 2), y - (r * 2) / 5],      // curl back to the right
+            [x + (r * 3) / 5, y + (r / 4)],      // right shoulder
+            [x + (r * 2) / 5, y + (r * 4) / 5],  // lower right
+            [x - (r * 2) / 5, y + (r * 4) / 5],  // lower left
+            [x - (r * 3) / 5, y + (r / 4)],      // left shoulder
+            [x - (r / 4), y - (r / 3)]           // inner curl notch
+        ]);
+        // Forked base notch (cell color) so it reads as fire, not a droplet.
+        dc.setColor(YELLOW, Gfx.COLOR_TRANSPARENT);
+        dc.fillPolygon([
+            [x, y + (r / 5)],
+            [x + (r / 4), y + (r * 4) / 5],
+            [x - (r / 4), y + (r * 4) / 5]
+        ]);
+        dc.setColor(BLACK, Gfx.COLOR_TRANSPARENT);
     }
 
     private function drawPin(dc, x, y, r) {
@@ -186,22 +246,59 @@ class ColorGridFaceView extends Ui.WatchFace {
         dc.fillPolygon([[x - (r / 2), y], [x + (r / 2), y], [x, y + r]]);
     }
 
-    private function drawBluetooth(dc, x, y, s) {
-        dc.setColor(CYAN, Gfx.COLOR_TRANSPARENT);
-        dc.setPenWidth(2);
-        dc.drawLine(x, y, x, y + s);
-        dc.drawLine(x, y, x + (s / 2), y + (s / 4));
-        dc.drawLine(x + (s / 2), y + (s / 4), x - (s / 3), y + (s / 2));
-        dc.drawLine(x - (s / 3), y + (s / 2), x + (s / 2), y + ((s * 3) / 4));
-        dc.drawLine(x + (s / 2), y + ((s * 3) / 4), x, y + s);
-    }
-
     private function drawBatteryIcon(dc, x, y, w, h, percent) {
+        var fill = (percent <= 15) ? RED : ((percent <= 35) ? ORANGE : GREEN);
+        // Level fill first, then the white shell on top for a clean rounded look.
+        var inner = ((w - 6) * percent) / 100;
+        dc.setColor(fill, Gfx.COLOR_TRANSPARENT);
+        dc.fillRoundedRectangle(x + 3, y + 3, inner, h - 6, 2);
         dc.setColor(WHITE, Gfx.COLOR_TRANSPARENT);
         dc.setPenWidth(2);
-        dc.drawRectangle(x, y, w, h);
-        dc.fillRectangle(x + w, y + (h / 3), 5, h / 3);
-        dc.fillRectangle(x + 4, y + 4, ((w - 8) * percent) / 100, h - 8);
+        dc.drawRoundedRectangle(x, y, w, h, 3);
+        dc.fillRoundedRectangle(x + w + 1, y + (h / 3), 3, h / 3, 1);
+    }
+
+    // Draws an integer value justified toward the center line. Values >= 10000
+    // are shown compactly as e.g. "12.3k" with a smaller 'k'. Uses the current
+    // foreground color.
+    private function drawCompact(dc, x, y, value, justifyRight, valueFont) {
+        if (value < 10000) {
+            var just = justifyRight
+                ? (Gfx.TEXT_JUSTIFY_RIGHT | Gfx.TEXT_JUSTIFY_VCENTER)
+                : (Gfx.TEXT_JUSTIFY_LEFT | Gfx.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(x, y, valueFont, value.toString(), just);
+            return;
+        }
+
+        var n = value / 1000.0;
+        var whole = n.toNumber();
+        var dec = ((n - whole) * 10).toNumber();
+        var numStr = whole.toString() + "." + dec.toString();
+        var kFont = Gfx.FONT_XTINY;
+
+        // Align the 'k' bottom with the digits' bottom. Number fonts have tall
+        // bottom padding, so lift it by ~1/6 of the height off the box bottom.
+        var numH = Gfx.getFontHeight(valueFont);
+        var kH = Gfx.getFontHeight(kFont);
+        var kTop = (y + (numH / 2)) - kH - (numH / 4);
+
+        if (justifyRight) {
+            var kw = dc.getTextWidthInPixels("k", kFont);
+            dc.drawText(x, kTop, kFont, "k", Gfx.TEXT_JUSTIFY_RIGHT);
+            dc.drawText(x - kw, y, valueFont, numStr, Gfx.TEXT_JUSTIFY_RIGHT | Gfx.TEXT_JUSTIFY_VCENTER);
+        } else {
+            var nw = dc.getTextWidthInPixels(numStr, valueFont);
+            dc.drawText(x, y, valueFont, numStr, Gfx.TEXT_JUSTIFY_LEFT | Gfx.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(x + nw, kTop, kFont, "k", Gfx.TEXT_JUSTIFY_LEFT);
+        }
+    }
+
+    private function halfWidth(r, dy) {
+        var v = (r * r) - (dy * dy);
+        if (v <= 0) {
+            return 0;
+        }
+        return Math.sqrt(v);
     }
 
     private function two(n) {
@@ -239,7 +336,7 @@ class ColorGridFaceView extends Ui.WatchFace {
         return whole.toString() + "." + decimals.toString();
     }
 
-    private function scale(size, value) {
-        return (value * size) / 360;
+    private function px(size, value) {
+        return (value * size) / 260;
     }
 }
