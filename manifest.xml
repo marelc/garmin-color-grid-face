@@ -5,11 +5,14 @@
         type="watchface"
         name="@Strings.AppName"
         entry="ColorGridFaceApp"
+        launcherIcon="@Drawables.LauncherIcon"
         minApiLevel="3.2.0">
         <iq:products>
             <iq:product id="fenix7pro"/>
         </iq:products>
-        <iq:permissions/>
+        <iq:permissions>
+            <iq:uses-permission id="SensorHistory"/>
+        </iq:permissions>
         <iq:languages>
             <iq:language>eng</iq:language>
         </iq:languages>
