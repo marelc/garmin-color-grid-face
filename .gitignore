@@ -4,4 +4,4 @@ gen/
 *.iq
 *.debug.xml
 *.jungle.bak
-
+simulator-*.png
