@@ -1,0 +1,7 @@
+bin/
+gen/
+*.prg
+*.iq
+*.debug.xml
+*.jungle.bak
+

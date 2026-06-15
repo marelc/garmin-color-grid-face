@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
+    <iq:application
+        id="1d834c97-77ef-4bfb-a525-7719fd8e59ab"
+        type="watchface"
+        name="@Strings.AppName"
+        entry="ColorGridFaceApp"
+        minApiLevel="3.2.0">
+        <iq:products>
+            <iq:product id="fenix7pro"/>
+        </iq:products>
+        <iq:permissions/>
+        <iq:languages>
+            <iq:language>eng</iq:language>
+        </iq:languages>
+    </iq:application>
+</iq:manifest>
