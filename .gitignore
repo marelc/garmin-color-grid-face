@@ -5,3 +5,6 @@ gen/
 *.debug.xml
 *.jungle.bak
 simulator-*.png
+
+# keep archived release builds
+!releases/*.prg
