@@ -16,11 +16,28 @@ class ColorGridFaceView extends Ui.WatchFace {
     private const GREEN = 0x55cc00;
     private const RED = 0xe00000;
 
+    // Data-field digits use a condensed vector font (narrower, so it can be
+    // taller without overflowing 4-digit values). Loaded once in onLayout.
+    private var _valueFont;
+    private var _valueH;
+    private var _kFont;
+    private var _kH;
+
     function initialize() {
         WatchFace.initialize();
     }
 
     function onLayout(dc) {
+        _valueFont = Gfx.getVectorFont({ :face => ["RobotoCondensedBold", "RobotoCondensed"], :size => 62 });
+        _kFont = Gfx.getVectorFont({ :face => ["RobotoCondensedBold", "RobotoCondensed"], :size => 33 });
+        if (_valueFont == null) {
+            _valueFont = Gfx.FONT_NUMBER_MEDIUM;
+        }
+        if (_kFont == null) {
+            _kFont = Gfx.FONT_XTINY;
+        }
+        _valueH = dc.getTextDimensions("8", _valueFont)[1];
+        _kH = dc.getTextDimensions("k", _kFont)[1];
     }
 
     function onShow() {
@@ -128,8 +145,8 @@ class ColorGridFaceView extends Ui.WatchFace {
 
         // Digits sized up (MEDIUM), justified toward the center line. Icons sit
         // at the outer (rounded) edge, top-aligned with the top of the digits.
-        var valueFont = Gfx.FONT_NUMBER_MEDIUM;
-        var numH = Gfx.getFontHeight(valueFont);
+        var valueFont = _valueFont;
+        var numH = _valueH;
         var topValueY = (gridTop + midY) / 2;
         var botValueY = (midY + gridBottom) / 2;
         var gap = px(size, 4);
@@ -143,9 +160,9 @@ class ColorGridFaceView extends Ui.WatchFace {
         var rHeart = px(size, 8);
         var rPin = px(size, 10);
 
-        // Visible top of the digits sits well below the number-font box top
-        // (number fonts carry a lot of top padding).
-        var pad = numH / 4;
+        // Visible top of the digits inside the font box (condensed vector font
+        // is fairly tight, so only a small top padding).
+        var pad = numH / 8;
         var topVisTop = (topValueY - (numH / 2)) + pad;
         var botVisTop = (botValueY - (numH / 2)) + pad;
 
@@ -167,8 +184,8 @@ class ColorGridFaceView extends Ui.WatchFace {
         dc.setColor(BLACK, Gfx.COLOR_TRANSPARENT);
         drawFlame(dc, xFlame, yFlame, rFlame);
         drawSteps(dc, xSteps, ySteps, rSteps);
-        drawCompact(dc, leftValueX, topValueY, calories, true, valueFont);
-        drawCompact(dc, rightValueX, topValueY, steps, false, valueFont);
+        drawCompact(dc, leftValueX, topValueY, calories, true, valueFont, numH);
+        drawCompact(dc, rightValueX, topValueY, steps, false, valueFont, numH);
 
         // Bottom-left: heart rate (green) — dark ink.
         drawHeart(dc, xHeart, yHeart, rHeart);
@@ -264,7 +281,7 @@ class ColorGridFaceView extends Ui.WatchFace {
     // Draws an integer value justified toward the center line. Values >= 10000
     // are shown compactly as e.g. "12.3k" with a smaller 'k'. Uses the current
     // foreground color.
-    private function drawCompact(dc, x, y, value, justifyRight, valueFont) {
+    private function drawCompact(dc, x, y, value, justifyRight, valueFont, valueH) {
         if (value < 10000) {
             var just = justifyRight
                 ? (Gfx.TEXT_JUSTIFY_RIGHT | Gfx.TEXT_JUSTIFY_VCENTER)
@@ -277,22 +294,19 @@ class ColorGridFaceView extends Ui.WatchFace {
         var whole = n.toNumber();
         var dec = ((n - whole) * 10).toNumber();
         var numStr = whole.toString() + "." + dec.toString();
-        var kFont = Gfx.FONT_XTINY;
 
-        // Align the 'k' bottom with the digits' bottom. Number fonts have tall
-        // bottom padding, so lift it by ~1/6 of the height off the box bottom.
-        var numH = Gfx.getFontHeight(valueFont);
-        var kH = Gfx.getFontHeight(kFont);
-        var kTop = (y + (numH / 2)) - kH - (numH / 4);
+        // Align the small 'k' bottom with the digits' bottom (both vector,
+        // tight metrics, so box-bottoms ~ glyph-bottoms).
+        var kTop = (y + (valueH / 2)) - _kH;
 
         if (justifyRight) {
-            var kw = dc.getTextWidthInPixels("k", kFont);
-            dc.drawText(x, kTop, kFont, "k", Gfx.TEXT_JUSTIFY_RIGHT);
+            var kw = dc.getTextWidthInPixels("k", _kFont);
+            dc.drawText(x, kTop, _kFont, "k", Gfx.TEXT_JUSTIFY_RIGHT);
             dc.drawText(x - kw, y, valueFont, numStr, Gfx.TEXT_JUSTIFY_RIGHT | Gfx.TEXT_JUSTIFY_VCENTER);
         } else {
             var nw = dc.getTextWidthInPixels(numStr, valueFont);
             dc.drawText(x, y, valueFont, numStr, Gfx.TEXT_JUSTIFY_LEFT | Gfx.TEXT_JUSTIFY_VCENTER);
-            dc.drawText(x + nw, kTop, kFont, "k", Gfx.TEXT_JUSTIFY_LEFT);
+            dc.drawText(x + nw, kTop, _kFont, "k", Gfx.TEXT_JUSTIFY_LEFT);
         }
     }
 
@@ -332,6 +346,11 @@ class ColorGridFaceView extends Ui.WatchFace {
 
     private function formatDistance(km) {
         var whole = km.toNumber();
+        // >= 10 km: one decimal ("10.4") so it stays as narrow as "2.43".
+        if (whole >= 10) {
+            var d = ((km - whole) * 10).toNumber();
+            return whole.toString() + "." + d.toString();
+        }
         var decimals = ((km - whole) * 100).toNumber();
         if (decimals < 10) {
             return whole.toString() + ".0" + decimals.toString();
