@@ -1,7 +1,7 @@
+using Toybox.Activity as Activity;
 using Toybox.ActivityMonitor as ActivityMonitor;
 using Toybox.Graphics as Gfx;
 using Toybox.Math as Math;
-using Toybox.SensorHistory as SensorHistory;
 using Toybox.System as Sys;
 using Toybox.Time as Time;
 using Toybox.Time.Gregorian as Gregorian;
@@ -68,7 +68,7 @@ class ColorGridFaceView extends Ui.WatchFace {
         var cx = w / 2;
 
         dc.setColor(WHITE, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, px(size, 20), Gfx.FONT_SMALL, dateText,
+        dc.drawText(cx, px(size, 24), Gfx.FONT_MEDIUM, dateText,
             Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER);
         dc.drawText(cx, px(size, 74), Gfx.FONT_NUMBER_THAI_HOT, timeText,
             Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER);
@@ -87,7 +87,7 @@ class ColorGridFaceView extends Ui.WatchFace {
         // just above the battery (minimal gaps).
         var gridLeft = 0;
         var gridRight = w;
-        var gridTop = px(size, 112);
+        var gridTop = px(size, 109);
         var gridBottom = px(size, 224);
 
         var midX = w / 2;
@@ -136,7 +136,8 @@ class ColorGridFaceView extends Ui.WatchFace {
         var leftValueX = midX - gap;
         var rightValueX = midX + gap;
 
-        var iconInset = px(size, 12);
+        var iconInset = px(size, 8);
+        var iconLift = px(size, 3);
         var rFlame = px(size, 8);
         var rSteps = px(size, 8);
         var rHeart = px(size, 8);
@@ -149,10 +150,10 @@ class ColorGridFaceView extends Ui.WatchFace {
         var botVisTop = (botValueY - (numH / 2)) + pad;
 
         // Each icon's center, set so its own top edge lands on the digits' top.
-        var yFlame = topVisTop + rFlame;             // flame top extent = r
-        var ySteps = topVisTop + (rSteps * 4) / 3;   // footprint top extent = 4r/3
-        var yHeart = botVisTop + (rHeart * 5) / 6;   // heart top extent = 5r/6
-        var yPin = botVisTop + (rPin * 3) / 4;       // pin top extent = 3r/4
+        var yFlame = (topVisTop - iconLift) + rFlame;            // flame top extent = r
+        var ySteps = (topVisTop - iconLift) + (rSteps * 4) / 3;  // footprint top extent = 4r/3
+        var yHeart = (botVisTop - iconLift) + (rHeart * 5) / 6;  // heart top extent = 5r/6
+        var yPin = (botVisTop - iconLift) + (rPin * 3) / 4;      // pin top extent = 3r/4
 
         var xFlame = (cx - halfWidth(r, yFlame - cy)) + iconInset;
         var xSteps = (cx + halfWidth(r, ySteps - cy)) - iconInset;
@@ -183,27 +184,25 @@ class ColorGridFaceView extends Ui.WatchFace {
         var stats = Sys.getSystemStats();
         var percent = stats.battery;
         var cx = w / 2;
-        var centerY = px(size, 243);
+        var centerY = px(size, 238);
         var days = Math.ceil(percent * 14.0 / 100.0).toNumber();
 
-        var iconW = px(size, 30);
-        var iconH = px(size, 14);
-        drawBatteryIcon(dc, cx - px(size, 38), centerY - (iconH / 2), iconW, iconH, percent);
+        var iconW = px(size, 36);
+        var iconH = px(size, 17);
+        drawBatteryIcon(dc, cx - px(size, 44), centerY - (iconH / 2), iconW, iconH, percent);
 
         dc.setColor(WHITE, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx + px(size, 20), centerY, Gfx.FONT_TINY, days.toString() + " d",
+        dc.drawText(cx + px(size, 22), centerY, Gfx.FONT_TINY, days.toString() + " d",
             Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER);
     }
 
     private function getHeartRate() {
-        var samples = SensorHistory.getHeartRateHistory({ :period => 1, :order => SensorHistory.ORDER_NEWEST_FIRST });
-        if (samples != null) {
-            var sample = samples.next();
-            if (sample != null && sample.data != null) {
-                return sample.data.toString();
-            }
+        // Current (live) heart rate; null when the watch isn't being worn.
+        var act = Activity.getActivityInfo();
+        if (act != null && act.currentHeartRate != null) {
+            return act.currentHeartRate.toString();
         }
-        return "53";
+        return "--";
     }
 
     private function drawHeart(dc, x, y, r) {
@@ -248,14 +247,18 @@ class ColorGridFaceView extends Ui.WatchFace {
 
     private function drawBatteryIcon(dc, x, y, w, h, percent) {
         var fill = (percent <= 15) ? RED : ((percent <= 35) ? ORANGE : GREEN);
-        // Level fill first, then the white shell on top for a clean rounded look.
-        var inner = ((w - 6) * percent) / 100;
-        dc.setColor(fill, Gfx.COLOR_TRANSPARENT);
-        dc.fillRoundedRectangle(x + 3, y + 3, inner, h - 6, 2);
+        // Chunky rounded shell: white body with a black inner gap (double border).
         dc.setColor(WHITE, Gfx.COLOR_TRANSPARENT);
-        dc.setPenWidth(2);
-        dc.drawRoundedRectangle(x, y, w, h, 3);
-        dc.fillRoundedRectangle(x + w + 1, y + (h / 3), 3, h / 3, 1);
+        dc.fillRoundedRectangle(x, y, w, h, 4);
+        dc.setColor(BLACK, Gfx.COLOR_TRANSPARENT);
+        dc.fillRoundedRectangle(x + 2, y + 2, w - 4, h - 4, 3);
+        // Level-colored fill.
+        var innerW = ((w - 8) * percent) / 100;
+        dc.setColor(fill, Gfx.COLOR_TRANSPARENT);
+        dc.fillRoundedRectangle(x + 4, y + 4, innerW, h - 8, 2);
+        // Rounded terminal nub.
+        dc.setColor(WHITE, Gfx.COLOR_TRANSPARENT);
+        dc.fillRoundedRectangle(x + w, y + (h / 3), 3, h / 3, 1);
     }
 
     // Draws an integer value justified toward the center line. Values >= 10000
